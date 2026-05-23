@@ -2,18 +2,30 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const keysDirectoryPath = path.join(__dirname, '..', '..', 'data', 'keys');
-const privateKeyPath = path.join(keysDirectoryPath, 'credichain-private.pem');
-const publicKeyPath = path.join(keysDirectoryPath, 'credichain-public.pem');
-const keyAlgorithm = 'RSA-SHA256';
+const keyAlgorithm = 'SHA256';
+
+function resolveKeyPaths() {
+  const fallbackDirectory = path.join(__dirname, '..', '..', 'keys');
+  const privateKeyPath = process.env.PRIVATE_KEY_PATH || path.join(fallbackDirectory, 'private.pem');
+  const publicKeyPath = process.env.PUBLIC_KEY_PATH || path.join(fallbackDirectory, 'public.pem');
+
+  return {
+    privateKeyPath,
+    publicKeyPath,
+    keysDirectoryPath: path.dirname(privateKeyPath)
+  };
+}
 
 function ensureSigningKeyPair() {
+  const { privateKeyPath, publicKeyPath, keysDirectoryPath } = resolveKeyPaths();
   fs.mkdirSync(keysDirectoryPath, { recursive: true });
 
   if (fs.existsSync(privateKeyPath) && fs.existsSync(publicKeyPath)) {
     return {
       privateKeyPem: fs.readFileSync(privateKeyPath, 'utf8'),
-      publicKeyPem: fs.readFileSync(publicKeyPath, 'utf8')
+      publicKeyPem: fs.readFileSync(publicKeyPath, 'utf8'),
+      privateKeyPath,
+      publicKeyPath
     };
   }
 
@@ -34,7 +46,9 @@ function ensureSigningKeyPair() {
 
   return {
     privateKeyPem: privateKey,
-    publicKeyPem: publicKey
+    publicKeyPem: publicKey,
+    privateKeyPath,
+    publicKeyPath
   };
 }
 
@@ -45,21 +59,21 @@ function serializeSignableData(data) {
 function signCertificatePayload(signableData) {
   const { privateKeyPem } = ensureSigningKeyPair();
   const signer = crypto.createSign(keyAlgorithm);
-  signer.update(serializeSignableData(signableData));
+  signer.update(serializeSignableData(signableData), 'utf8');
   signer.end();
   return signer.sign(privateKeyPem, 'base64');
 }
 
-function verifyCertificatePayloadSignature(signableData, signature) {
+function verifyCertificatePayloadSignature(signableData, signature, publicKeyPem) {
   if (!signature) {
     return false;
   }
 
-  const { publicKeyPem } = ensureSigningKeyPair();
   const verifier = crypto.createVerify(keyAlgorithm);
-  verifier.update(serializeSignableData(signableData));
+  verifier.update(serializeSignableData(signableData), 'utf8');
   verifier.end();
-  return verifier.verify(publicKeyPem, signature, 'base64');
+  const keyMaterial = publicKeyPem || ensureSigningKeyPair().publicKeyPem;
+  return verifier.verify(keyMaterial, signature, 'base64');
 }
 
 function getPublicKeyPem() {

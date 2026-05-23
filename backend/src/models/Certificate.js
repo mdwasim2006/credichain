@@ -26,6 +26,10 @@ const certificateSchema = new mongoose.Schema(
       type: String,
       default: 'CrediChain Institute'
     },
+    issuerPublicKey: {
+      type: String,
+      required: true
+    },
     hash: {
       type: String,
       required: true
@@ -36,7 +40,15 @@ const certificateSchema = new mongoose.Schema(
     },
     publicKey: {
       type: String,
+      default: null
+    },
+    qrCode: {
+      type: String,
       required: true
+    },
+    qrCodeDataUrl: {
+      type: String,
+      default: null
     },
     blockchainRecordId: {
       type: String,
@@ -76,7 +88,8 @@ const certificateSchema = new mongoose.Schema(
     }
   },
   {
-    timestamps: true
+    timestamps: true,
+    collection: 'certificates'
   }
 );
 

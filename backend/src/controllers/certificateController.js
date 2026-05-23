@@ -20,6 +20,16 @@ function buildCertificatePayload(body) {
   };
 }
 
+function buildVerificationUrl(certificateId) {
+  const publicBackendUrl = process.env.PUBLIC_BACKEND_URL || process.env.BACKEND_PUBLIC_URL || '';
+  const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  if (publicBackendUrl) {
+    return `${publicBackendUrl.replace(/\/$/, '')}/verify/${encodeURIComponent(certificateId)}`;
+  }
+
+  return `${frontendBaseUrl.replace(/\/$/, '')}/verify?certificateId=${encodeURIComponent(certificateId)}`;
+}
+
 async function createCertificate(req, res) {
   try {
     const { issuer = 'CrediChain Institute' } = req.body;
@@ -50,8 +60,7 @@ async function createCertificate(req, res) {
       issuer
     });
 
-    const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const verificationUrl = `${frontendBaseUrl.replace(/\/$/, '')}/verify?certificateId=${encodeURIComponent(certificateId)}`;
+    const verificationUrl = buildVerificationUrl(certificateId);
     const qrCodeDataUrl = await generateQrCodeDataUrl(verificationUrl);
 
     const certificate = await storeCreateCertificate({
@@ -62,11 +71,13 @@ async function createCertificate(req, res) {
       issuer,
       hash,
       digitalSignature,
+      issuerPublicKey: getPublicKeyPem(),
       publicKey: getPublicKeyPem(),
+      qrCode: qrCodeDataUrl,
+      qrCodeDataUrl,
       blockchainRecordId: String(blockchainRecord.blockNumber),
       blockchainTransactionHash: blockchainRecord.transactionHash,
       blockchainTimestamp: blockchainRecord.timestamp,
-      qrCodeDataUrl
     });
 
     await incrementTotalCertificates(1);
@@ -285,7 +296,10 @@ async function generateCertificatePdf(req, res) {
       issueDate: normalizeIssueDate(req.body.issueDate || req.body.date),
       issuer: normalizeText(req.body.issuer) || 'CrediChain Institute',
       digitalSignature: normalizeText(req.body.digitalSignature) || 'Simulated-Signature-Verified',
-      qrCodeDataUrl: normalizeText(req.body.qrCodeDataUrl),
+      issuerPublicKey: normalizeText(req.body.issuerPublicKey) || normalizeText(req.body.publicKey),
+      publicKey: normalizeText(req.body.publicKey) || normalizeText(req.body.issuerPublicKey),
+      qrCode: normalizeText(req.body.qrCode) || normalizeText(req.body.qrCodeDataUrl),
+      qrCodeDataUrl: normalizeText(req.body.qrCodeDataUrl) || normalizeText(req.body.qrCode),
       hash: normalizeText(req.body.hash)
     };
 
@@ -296,9 +310,8 @@ async function generateCertificatePdf(req, res) {
       });
     }
 
-    const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const verificationUrl = `${frontendBaseUrl.replace(/\/$/, '')}/verify?certificateId=${encodeURIComponent(certificate.certificateId)}`;
-    const qrCodeDataUrl = certificate.qrCodeDataUrl || await generateQrCodeDataUrl(verificationUrl);
+    const verificationUrl = buildVerificationUrl(certificate.certificateId);
+    const qrCodeDataUrl = certificate.qrCodeDataUrl || certificate.qrCode || await generateQrCodeDataUrl(verificationUrl);
     const qrBuffer = dataUrlToBuffer(qrCodeDataUrl);
 
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -339,9 +352,8 @@ async function downloadCertificatePdfById(req, res) {
       });
     }
 
-    const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const verificationUrl = `${frontendBaseUrl.replace(/\/$/, '')}/verify?certificateId=${encodeURIComponent(certificate.certificateId)}`;
-    const qrCodeDataUrl = certificate.qrCodeDataUrl || await generateQrCodeDataUrl(verificationUrl);
+    const verificationUrl = buildVerificationUrl(certificate.certificateId);
+    const qrCodeDataUrl = certificate.qrCodeDataUrl || certificate.qrCode || await generateQrCodeDataUrl(verificationUrl);
     const qrBuffer = dataUrlToBuffer(qrCodeDataUrl);
 
     const doc = new PDFDocument({ size: 'A4', margin: 40 });

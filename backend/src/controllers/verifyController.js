@@ -24,6 +24,16 @@ function resolveCandidateData(storedCertificate, requestBody) {
   };
 }
 
+function buildSignablePayload(certificateData, hash) {
+  return {
+    certificateId: normalizeText(certificateData.certificateId),
+    name: normalizeText(certificateData.name),
+    course: normalizeText(certificateData.course),
+    issueDate: normalizeIssueDate(certificateData.issueDate),
+    hash
+  };
+}
+
 function getModifiedFields(storedCertificate, candidateData) {
   if (!storedCertificate || !candidateData) {
     return [];
@@ -52,14 +62,14 @@ function getModifiedFields(storedCertificate, candidateData) {
   });
 }
 
-async function calculateCertificateTrustScore(certificateId, hashMatches, signatureValid) {
+async function calculateCertificateTrustScore(certificateId, hashMatches, signatureMatches) {
   let score = 0;
 
   if (hashMatches) {
     score += 60;
   }
 
-  if (signatureValid) {
+  if (signatureMatches) {
     score += 20;
   }
 
@@ -81,7 +91,7 @@ async function calculateCertificateTrustScore(certificateId, hashMatches, signat
   return Math.max(0, Math.min(100, score));
 }
 
-function classifyVerificationResult({ certificate, hashMatches, signatureValid, fraudStatus, candidateData, recalculatedHash, trustScore }) {
+function classifyVerificationResult({ certificate, hashMatches, signatureMatches, fraudStatus, candidateData, recalculatedHash, trustScore }) {
   if (!certificate) {
     return {
       status: 'not_found',
@@ -97,15 +107,15 @@ function classifyVerificationResult({ certificate, hashMatches, signatureValid, 
   const fraudDetected = Boolean(fraudStatus?.suspicious);
   const status = !hashMatches
     ? 'tampered'
-    : !signatureValid
+    : !signatureMatches
       ? 'forged'
       : fraudDetected
         ? 'suspicious'
         : 'valid';
 
-  const signatureStatus = !hashMatches && !signatureValid
+  const signatureStatus = !signatureMatches
     ? 'invalid'
-    : hashMatches && signatureValid
+    : hashMatches && signatureMatches
       ? 'valid'
       : 'invalid';
 
@@ -135,7 +145,7 @@ function classifyVerificationResult({ certificate, hashMatches, signatureValid, 
       storedHash: certificate.hash,
       generatedHash: recalculatedHash,
       hashMismatch: !hashMatches,
-      signatureValid,
+        signatureMatch: signatureMatches,
       modifiedFields: getModifiedFields(certificate, candidateData)
     }
   };
@@ -180,16 +190,19 @@ async function verifyCertificate(req, res) {
     const blockchainRecord = getCertificateRecord(certificate.certificateId);
     const blockchainHashMatches = Boolean(blockchainRecord && blockchainRecord.hash === certificate.hash);
     const hashMatches = recalculatedHash === certificate.hash;
-    // SAFE FIX: Signature validation consistent with hash validation
-    // TODO: Replace with full RSA verification after hackathon
-    const signatureValid = hashMatches;
-    const isValid = hashMatches && blockchainHashMatches && signatureValid;
+    const signablePayload = buildSignablePayload(candidateData, certificate.hash);
+    const signatureMatches = verifyCertificatePayloadSignature(
+      signablePayload,
+      certificate.digitalSignature,
+      certificate.issuerPublicKey || certificate.publicKey
+    );
+    const isValid = hashMatches && blockchainHashMatches && signatureMatches;
     const auditStatus = isValid
       ? 'valid'
       : !hashMatches
         ? 'tampered'
-        : !signatureValid
-          ? 'not_found'
+        : !signatureMatches
+          ? 'tampered'
           : 'not_found';
 
     const verificationTracking = await recordVerification(auditStatus, {
@@ -199,12 +212,12 @@ async function verifyCertificate(req, res) {
     });
 
     const currentFraudStatus = isValid ? await getFraudStatus(clientMetadata) : verificationTracking.fraudStatus;
-    const dynamicTrustScore = await calculateCertificateTrustScore(certificate.certificateId, hashMatches, signatureValid);
+    const dynamicTrustScore = await calculateCertificateTrustScore(certificate.certificateId, hashMatches, signatureMatches);
 
     const classification = classifyVerificationResult({
       certificate,
       hashMatches,
-      signatureValid,
+      signatureMatches,
       fraudStatus: currentFraudStatus,
       candidateData,
       recalculatedHash,
@@ -222,13 +235,14 @@ async function verifyCertificate(req, res) {
       trustScore: classification.trustScore,
       fraudDetected: classification.fraudDetected,
       signatureStatus: classification.signatureStatus,
-      signatureValid,
+      signatureValid: signatureMatches,
       fraudStatus: currentFraudStatus,
       data: {
         certificateId: certificate.certificateId,
         storedHash: certificate.hash,
         recalculatedHash,
         hashMatches,
+        signatureMatches,
         modifiedFields: classification.modifiedFields,
         proof: classification.proof,
         blockchainRecord,
@@ -330,17 +344,20 @@ async function uploadVerifyCertificate(req, res) {
     const blockchainRecord = getCertificateRecord(storedCertificate.certificateId);
     const blockchainHashMatches = Boolean(blockchainRecord && blockchainRecord.hash === storedCertificate.hash);
     const hashMatches = generatedHash === storedCertificate.hash;
-    // SAFE FIX: Signature validation consistent with hash validation
-    // TODO: Replace with full RSA verification after hackathon
-    const signatureValid = hashMatches;
-    const isValid = hashMatches && blockchainHashMatches && signatureValid;
+    const signablePayload = buildSignablePayload(uploadedPayload, storedCertificate.hash);
+    const signatureMatches = verifyCertificatePayloadSignature(
+      signablePayload,
+      storedCertificate.digitalSignature,
+      storedCertificate.issuerPublicKey || storedCertificate.publicKey
+    );
+    const isValid = hashMatches && blockchainHashMatches && signatureMatches;
 
     const auditStatus = isValid
       ? 'valid'
       : !hashMatches
         ? 'tampered'
-        : !signatureValid
-          ? 'not_found'
+        : !signatureMatches
+          ? 'tampered'
           : 'not_found';
 
     const verificationTracking = await recordVerification(auditStatus, {
@@ -350,12 +367,12 @@ async function uploadVerifyCertificate(req, res) {
     });
 
     const currentFraudStatus = isValid ? await getFraudStatus(clientMetadata) : verificationTracking.fraudStatus;
-    const dynamicTrustScore = await calculateCertificateTrustScore(storedCertificate.certificateId, hashMatches, signatureValid);
+    const dynamicTrustScore = await calculateCertificateTrustScore(storedCertificate.certificateId, hashMatches, signatureMatches);
 
     const classification = classifyVerificationResult({
       certificate: storedCertificate,
       hashMatches,
-      signatureValid,
+      signatureMatches,
       fraudStatus: currentFraudStatus,
       candidateData: uploadedPayload,
       recalculatedHash: generatedHash,
@@ -373,7 +390,7 @@ async function uploadVerifyCertificate(req, res) {
       trustScore: classification.trustScore,
       fraudDetected: classification.fraudDetected,
       signatureStatus: classification.signatureStatus,
-      signatureValid,
+      signatureValid: signatureMatches,
       fraudStatus: currentFraudStatus,
       data: {
         certificateId: storedCertificate.certificateId,
@@ -381,6 +398,7 @@ async function uploadVerifyCertificate(req, res) {
         generatedHash,
         storedHash: storedCertificate.hash,
         hashMatches,
+        signatureMatches,
         modifiedFields: classification.modifiedFields,
         proof: classification.proof,
         certificate: updatedCertificate || storedCertificate

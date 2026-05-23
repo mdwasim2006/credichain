@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { loginAdmin, setAuthToken } from '../services/api';
 
 export default function AccessPage({ onRoleSelect }) {
   const navigate = useNavigate();
@@ -27,22 +28,19 @@ export default function AccessPage({ onRoleSelect }) {
     event.preventDefault();
     setIsSubmitting(true);
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 400);
-    });
-
-    if (adminCredentials.username === 'admin' && adminCredentials.password === '1234') {
+    try {
+      const response = await loginAdmin(adminCredentials);
+      setAuthToken(response.token);
       console.log('[RoleSelection] Admin login success');
-      onRoleSelect({ role: 'admin', isAuthenticated: true });
+      onRoleSelect({ role: 'admin', isAuthenticated: true, token: response.token });
       navigate('/dashboard', { replace: true });
       console.log('[RoleSelection] Navigated to /dashboard');
+    } catch (loginError) {
+      setError(loginError.message || 'Invalid credentials');
+      console.log('[RoleSelection] Admin login failed');
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    setError('Invalid credentials');
-    console.log('[RoleSelection] Admin login failed');
-    setIsSubmitting(false);
   }
 
   return (
@@ -114,7 +112,7 @@ export default function AccessPage({ onRoleSelect }) {
                 <button type="submit" disabled={isSubmitting} className="rounded-full bg-blue-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
                   {isSubmitting ? 'Signing in...' : 'Enter Admin Panel'}
                 </button>
-                <p className="text-xs uppercase tracking-[0.2em] text-slateui-500">Demo credentials: admin / 1234</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slateui-500">Uses backend admin auth</p>
               </div>
             </form>
           ) : (

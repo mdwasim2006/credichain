@@ -1,7 +1,7 @@
 const fs = require('fs');
 const mongoose = require('mongoose');
 const path = require('path');
-const FraudLog = require('../models/FraudLog');
+const VerificationLog = require('../models/VerificationLog');
 const Stats = require('../models/Stats');
 
 const GLOBAL_KEY = 'global';
@@ -179,7 +179,7 @@ async function recordFraudLog(attemptType, metadata = {}, failedAttempts = 0, ta
   const suspicious = failedAttempts >= SUSPICIOUS_THRESHOLD;
 
   if (isMongoReady()) {
-    await FraudLog.create({
+    await VerificationLog.create({
       certId: metadata.certificateId || null,
       attemptType,
       timestamp: metadata.timestamp ? new Date(metadata.timestamp) : new Date(),
@@ -215,8 +215,8 @@ async function getActorFraudCounts(metadata = {}) {
 
   if (isMongoReady()) {
     const [failedAttempts, tamperedAttempts] = await Promise.all([
-      FraudLog.countDocuments({ actorKey, timestamp: { $gte: thresholdTime } }),
-      FraudLog.countDocuments({ actorKey, attemptType: 'tampered', timestamp: { $gte: thresholdTime } })
+      VerificationLog.countDocuments({ actorKey, timestamp: { $gte: thresholdTime } }),
+      VerificationLog.countDocuments({ actorKey, attemptType: 'tampered', timestamp: { $gte: thresholdTime } })
     ]);
 
     return {

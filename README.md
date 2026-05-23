@@ -45,18 +45,22 @@ Create `backend/.env` from `backend/.env.example` and set:
 
 ```env
 PORT=5000
-MONGODB_URI=mongodb://127.0.0.1:27017/credichain
-FRONTEND_URL=http://localhost:5173
+MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/credichain
+FRONTEND_URL=https://your-netlify-site.netlify.app
+PUBLIC_BACKEND_URL=https://credichain-api.onrender.com
+PRIVATE_KEY_PATH=./keys/private.pem
+PUBLIC_KEY_PATH=./keys/public.pem
+JWT_SECRET=replace-with-a-long-random-string
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-me-now
 NODE_ENV=development
 ```
 
-Optionally create `frontend/.env` from `frontend/.env.example` if you want to override the backend URL used by the UI.
+Create `frontend/.env` from `frontend/.env.example` and point it to your Render API URL.
 
 ### 3. Start MongoDB
 
-Make sure MongoDB is running locally or update `MONGODB_URI` to your Atlas cluster.
-
-If MongoDB is not available, the backend automatically falls back to an in-memory demo mode so you can still run and present the app immediately.
+Use MongoDB Atlas for production. Local fallback mode is only used when `NODE_ENV` is not `production`.
 
 ### 4. Run the app
 
@@ -120,10 +124,10 @@ Each issuance appends a new record to the ledger. Verification compares the stor
 
 ## QR Code Generation
 
-The backend generates a QR code that points to:
+The backend generates a QR code that points to your public backend verification URL, which redirects to the Netlify verification page:
 
 ```text
-http://localhost:5173/verify?certificateId=YOUR_CERTIFICATE_ID
+https://credichain-api.onrender.com/verify/YOUR_CERTIFICATE_ID
 ```
 
 This lets the QR code open the verification page directly.

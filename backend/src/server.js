@@ -3,24 +3,32 @@ const app = require('./app');
 const { connectDatabase } = require('./config/database');
 const { seedLedger } = require('./services/blockchainService');
 const { seedDemoCertificatesData } = require('./controllers/demoController');
+const { ensureDefaultAdmin } = require('./controllers/authController');
 const { countCertificates, getAllCertificates, getVerificationTotals, setStoreMode, isMemoryMode } = require('./services/certificateStore');
 const { initializeVerificationStats } = require('./services/verificationStatsService');
 
 dotenv.config();
 
 const port = process.env.PORT || 5000;
+const isProduction = (process.env.NODE_ENV || 'development') === 'production';
+const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
 
 async function startServer() {
   try {
     try {
-      await connectDatabase(process.env.MONGODB_URI);
+      await connectDatabase(mongoUri);
       setStoreMode('mongo');
+      await ensureDefaultAdmin();
     } catch (connectionError) {
+      if (isProduction) {
+        throw connectionError;
+      }
+
       setStoreMode('memory');
       console.warn(`MongoDB unavailable, using in-memory demo mode: ${connectionError.message}`);
     }
 
-    if ((process.env.NODE_ENV || 'development') !== 'production') {
+    if (!isProduction) {
       const certificateCount = await countCertificates();
       if (certificateCount === 0) {
         await seedDemoCertificatesData();

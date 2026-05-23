@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '') || (import.meta.env.DEV ? '/api' : '');
+const AUTH_TOKEN_KEY = 'credichain-token';
+const ENABLE_OFFLINE_FALLBACK = Boolean(import.meta.env.DEV || !API_BASE_URL);
 const FALLBACK_STORAGE_KEY = 'credichain-fallback-certificates';
 const FALLBACK_STATS_KEY = 'credichain-fallback-stats';
 const FALLBACK_AUDIT_KEY = 'credichain-fallback-audit';
@@ -343,9 +345,11 @@ function updateFallbackVerification(certificateId, isValid) {
 }
 
 async function tryApi(path, options = {}) {
+  const authToken = localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY);
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers || {})
     },
     ...options
@@ -363,6 +367,10 @@ async function request(path, options = {}) {
   try {
     return await tryApi(path, options);
   } catch (error) {
+    if (!ENABLE_OFFLINE_FALLBACK) {
+      throw error;
+    }
+
     return fallbackRequest(path, options, error);
   }
 }
@@ -451,6 +459,22 @@ async function fallbackRequest(path, options = {}, originalError = null) {
       data: createdCertificate,
       verificationUrl: `${window.location.origin}/verify?certificateId=${encodeURIComponent(createdCertificate.certificateId)}`
     };
+  }
+
+  if (path === '/auth/login' && method === 'POST') {
+    const payload = JSON.parse(options.body || '{}');
+    if (payload.username === 'admin' && payload.password === '1234') {
+      const token = 'offline-admin-token';
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+      return {
+        success: true,
+        token,
+        user: { username: 'admin', role: 'admin' }
+      };
+    }
+
+    throw new Error('Invalid credentials');
   }
 
   if (path === '/verify-certificate' && method === 'POST') {
@@ -611,6 +635,13 @@ export function verifyCertificate(payload) {
   });
 }
 
+export function loginAdmin(payload) {
+  return request('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
 export function fetchDashboardStats() {
   return request('/stats');
 }
@@ -660,6 +691,17 @@ export async function downloadCertificateById(certificateId) {
 
 export async function downloadCertificatePdf(payload) {
   return downloadCertificateById(payload?.certificateId);
+}
+
+export function setAuthToken(token) {
+  if (!token) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    return;
+  }
+
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  sessionStorage.setItem(AUTH_TOKEN_KEY, token);
 }
 
 export { API_BASE_URL };

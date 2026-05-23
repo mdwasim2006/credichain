@@ -63,7 +63,10 @@ function initializeMemoryCertificates() {
       issueDate: normalizedCertificate.issueDate,
       hash
     });
-    normalizedCertificate.publicKey = normalizedCertificate.publicKey || getPublicKeyPem();
+    normalizedCertificate.issuerPublicKey = normalizedCertificate.issuerPublicKey || normalizedCertificate.publicKey || getPublicKeyPem();
+    normalizedCertificate.publicKey = normalizedCertificate.publicKey || normalizedCertificate.issuerPublicKey;
+    normalizedCertificate.qrCode = normalizedCertificate.qrCode || normalizedCertificate.qrCodeDataUrl || null;
+    normalizedCertificate.qrCodeDataUrl = normalizedCertificate.qrCodeDataUrl || normalizedCertificate.qrCode || null;
 
     memoryCertificates.push(normalizedCertificate);
   });

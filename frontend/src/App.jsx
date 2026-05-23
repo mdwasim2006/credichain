@@ -28,10 +28,11 @@ export default function App() {
     try {
       const storedRole = localStorage.getItem('credichain-role');
       const storedAuth = localStorage.getItem('credichain-auth');
+      const storedToken = localStorage.getItem('credichain-token') || sessionStorage.getItem('credichain-token');
       const savedSession = JSON.parse(sessionStorage.getItem('credichain-session') || '{}');
 
       if (storedRole && storedAuth === 'true') {
-        return { role: storedRole, isAuthenticated: true };
+        return { role: storedRole, isAuthenticated: true, token: storedToken || savedSession.token || null };
       }
 
       if (savedSession?.role && savedSession?.isAuthenticated) {
@@ -55,6 +56,10 @@ export default function App() {
     setSession(nextSession);
     localStorage.setItem('credichain-role', nextSession.role);
     localStorage.setItem('credichain-auth', String(Boolean(nextSession.isAuthenticated)));
+    if (nextSession.token) {
+      localStorage.setItem('credichain-token', nextSession.token);
+      sessionStorage.setItem('credichain-token', nextSession.token);
+    }
     sessionStorage.setItem('credichain-session', JSON.stringify(nextSession));
   }
 
@@ -62,7 +67,9 @@ export default function App() {
     setSession({ role: null, isAuthenticated: false });
     localStorage.removeItem('credichain-role');
     localStorage.removeItem('credichain-auth');
+    localStorage.removeItem('credichain-token');
     sessionStorage.removeItem('credichain-session');
+    sessionStorage.removeItem('credichain-token');
   }
 
   const effectiveSession = session.isAuthenticated ? session : readStoredSession();

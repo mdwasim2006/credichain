@@ -22,6 +22,7 @@ const demoCertificates = [
 ];
 
 async function seedDemoCertificatesData() {
+  const publicBackendUrl = process.env.PUBLIC_BACKEND_URL || process.env.BACKEND_PUBLIC_URL || '';
   const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   const createdCertificates = [];
 
@@ -53,7 +54,9 @@ async function seedDemoCertificatesData() {
       issuer: demoCertificate.issuer
     });
 
-    const verificationUrl = `${frontendBaseUrl.replace(/\/$/, '')}/verify?certificateId=${encodeURIComponent(certificateId)}`;
+    const verificationUrl = publicBackendUrl
+      ? `${publicBackendUrl.replace(/\/$/, '')}/verify/${encodeURIComponent(certificateId)}`
+      : `${frontendBaseUrl.replace(/\/$/, '')}/verify?certificateId=${encodeURIComponent(certificateId)}`;
     const qrCodeDataUrl = await generateQrCodeDataUrl(verificationUrl);
 
     const created = await createCertificate({
@@ -64,7 +67,9 @@ async function seedDemoCertificatesData() {
       issuer: demoCertificate.issuer,
       hash,
       digitalSignature,
+      issuerPublicKey: getPublicKeyPem(),
       publicKey: getPublicKeyPem(),
+      qrCode: qrCodeDataUrl,
       blockchainRecordId: String(blockchainRecord.blockNumber),
       blockchainTransactionHash: blockchainRecord.transactionHash,
       blockchainTimestamp: blockchainRecord.timestamp,

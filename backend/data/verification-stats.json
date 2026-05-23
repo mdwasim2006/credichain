@@ -1,11 +1,18 @@
 {
   "totalCertificates": 18,
-  "totalVerifications": 58,
-  "validChecks": 35,
+  "totalVerifications": 59,
+  "validChecks": 36,
   "tamperedAttempts": 0,
   "fraudAttempts": 23,
   "suspiciousAlerts": 1,
   "auditTrail": [
+    {
+      "certificateId": "CRD-DEMO-002",
+      "name": "Noah Carter",
+      "status": "VALID",
+      "timestamp": "2026-05-23T16:51:03.821Z",
+      "actorKey": "::1"
+    },
     {
       "certificateId": "CRD-MO07JVG3-FAC904D6",
       "name": "Unknown",
